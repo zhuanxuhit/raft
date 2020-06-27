@@ -270,6 +270,7 @@ func (r *Raft) runCandidate() {
 	for r.getState() == Candidate {
 		select {
 		case rpc := <-r.rpcCh:
+			// 有新的消息
 			r.processRPC(rpc)
 
 		case vote := <-voteCh:
@@ -729,7 +730,7 @@ func (r *Raft) leaderLoop() {
 			b.respond(ErrCantBootstrap)
 
 		case newLog := <-r.applyCh:
-			if r.getLeadershipTransferInProgress() {
+			if r.getLeadershipTransferInProgress() { // leader控制权转移中
 				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
 				newLog.respond(ErrLeadershipTransferInProgress)
 				continue
@@ -738,6 +739,7 @@ func (r *Raft) leaderLoop() {
 			ready := []*logFuture{newLog}
 		GROUP_COMMIT_LOOP:
 			for i := 0; i < r.conf.MaxAppendEntries; i++ {
+				// 一次性最多同时发送MaxAppendEntries
 				select {
 				case newLog := <-r.applyCh:
 					ready = append(ready, newLog)
@@ -748,6 +750,7 @@ func (r *Raft) leaderLoop() {
 
 			// Dispatch the logs
 			if stepDown {
+				// 任期满了在换届中。
 				// we're in the process of stepping down as leader, don't process anything new
 				for i := range ready {
 					ready[i].respond(ErrNotLeader)
@@ -1199,6 +1202,7 @@ func (r *Raft) processRPC(rpc RPC) {
 
 	switch cmd := rpc.Command.(type) {
 	case *AppendEntriesRequest:
+		// 日志复制
 		r.appendEntries(rpc, cmd)
 	case *RequestVoteRequest:
 		r.requestVote(rpc, cmd)
@@ -1272,6 +1276,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 
 	// Verify the last log entry
 	if a.PrevLogEntry > 0 {
+		// 获取本地的日志
 		lastIdx, lastTerm := r.getLastEntry()
 
 		var prevLogTerm uint64
@@ -1299,7 +1304,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 			return
 		}
 	}
-
+	// 此处已经保证了PrevLogTerm，PrevLogEntry跟本地是一致的了
 	// Process any new entries
 	if len(a.Entries) > 0 {
 		start := time.Now()

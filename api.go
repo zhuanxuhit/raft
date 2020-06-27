@@ -79,6 +79,7 @@ type Raft struct {
 
 	// applyCh is used to async send logs to the main thread to
 	// be committed and applied to the FSM.
+	// make(chan *logFuture), 在 NewRaft 中初始化
 	applyCh chan *logFuture
 
 	// Configuration provided at Raft initialization
@@ -118,6 +119,8 @@ type Raft struct {
 	// candidate because the leader tries to transfer leadership. This flag is
 	// used in RequestVoteRequest to express that a leadership transfer is going
 	// on.
+	// leader 控制权主动转入
+	// 默认情况下只有leader超时了，follower才会开始选举流程
 	candidateFromLeadershipTransfer bool
 
 	// Stores our local server ID, used to avoid sending RPCs to ourself
@@ -144,6 +147,9 @@ type Raft struct {
 	latestConfiguration atomic.Value
 
 	// RPC chan comes from the transport layer
+	// trans.Consumer()
+	// tcp是在net_transport中获取
+	// Inmem是在InmemTransport中获取
 	rpcCh <-chan RPC
 
 	// Shutdown channel to exit, protected to prevent concurrent exits
