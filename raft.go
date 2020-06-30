@@ -543,6 +543,7 @@ func (r *Raft) leaderLoop() {
 			r.processRPC(rpc)
 
 		case <-r.leaderState.stepDown:
+			// 卸任leader，当发送消息给其他follower的时候，发现任期已经过了
 			r.setState(Follower)
 
 		case future := <-r.leadershipTransferCh:
@@ -615,6 +616,7 @@ func (r *Raft) leaderLoop() {
 			go r.leadershipTransfer(*id, *address, state, stopCh, doneCh)
 
 		case <-r.leaderState.commitCh:
+			// 在commitment的recalculate处会更新
 			// Process the newly committed entries
 			oldCommitIndex := r.getCommitIndex()
 			commitIndex := r.leaderState.commitment.getCommitIndex()
@@ -1324,6 +1326,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 					"error", err)
 				return
 			}
+			// 删除冲突日志
 			if entry.Term != storeEntry.Term {
 				r.logger.Warn("clearing log suffix",
 					"from", entry.Index,
@@ -1332,6 +1335,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 					r.logger.Error("failed to clear log suffix", "error", err)
 					return
 				}
+				// 回退最新的配置信息
 				if entry.Index <= r.configurations.latestIndex {
 					r.setLatestConfiguration(r.configurations.committed, r.configurations.committedIndex)
 				}
@@ -1367,6 +1371,7 @@ func (r *Raft) appendEntries(rpc RPC, a *AppendEntriesRequest) {
 		start := time.Now()
 		idx := min(a.LeaderCommitIndex, r.getLastIndex())
 		r.setCommitIndex(idx)
+		// 如果配置的最新记录小于已经提交的idx，则更新已提交配置
 		if r.configurations.latestIndex <= idx {
 			r.setCommittedConfiguration(r.configurations.latest, r.configurations.latestIndex)
 		}

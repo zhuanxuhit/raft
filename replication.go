@@ -140,12 +140,16 @@ RPC:
 	for !shouldStop {
 		select {
 		case maxIndex := <-s.stopCh:
+			// 有两种情况会关闭：
+			// 1. leader卸任
+			// 2. follower从集群中移出，在这个场景下，会再最后尝试一次复制
 			// Make a best effort to replicate up to this index
 			if maxIndex > 0 {
 				r.replicateTo(s, maxIndex)
 			}
 			return
 		case deferErr := <-s.triggerDeferErrorCh:
+			// 发送方能够获取到结果通知
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
 			if !shouldStop {
@@ -154,6 +158,7 @@ RPC:
 				deferErr.respond(fmt.Errorf("replication failed"))
 			}
 		case <-s.triggerCh:
+			// 当有新的日志到来的时候，都会触发
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
 		// This is _not_ our heartbeat mechanism but is to ensure
@@ -162,6 +167,7 @@ RPC:
 		// can't do this to keep them unblocked by disk IO on the
 		// follower. See https://github.com/hashicorp/raft/issues/282.
 		case <-randomTimeout(r.conf.CommitTimeout):
+			// 周期性的进行复制
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
 		}

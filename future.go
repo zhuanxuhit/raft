@@ -281,6 +281,8 @@ func (v *verifyFuture) vote(leader bool) {
 			v.notifyCh = nil
 		}
 	} else {
+		// 有一个认为不是leader了，则直接通知
+		// 那这个如果是leader，集群中应该所有人都认为是leader，只要有一个人认为不是，其实就已经不是leader了
 		v.notifyCh <- v
 		v.notifyCh = nil
 	}
